@@ -128,7 +128,7 @@ main(int argc, char **argv)
 			if (!ni_set_global_config_path(optarg)) {
 				fprintf(stderr, "Unable to set config file '%s': %m\n", optarg);
 				status = NI_LSB_RC_ERROR;
-				goto checkup;
+				goto done;
 			}
 			break;
 
@@ -141,14 +141,14 @@ main(int argc, char **argv)
 			}
 			if (ni_enable_debug(optarg) < 0) {
 				fprintf(stderr, "Bad debug facility \"%s\"\n", optarg);
-				goto checkup;
+				goto done;
 			}
 			break;
 
 		case OPT_LOG_LEVEL:
 			if (!ni_log_level_set(optarg)) {
 				fprintf(stderr, "Bad log level \%s\"\n", optarg);
-				goto checkup;
+				goto done;
 			}
 			break;
 
@@ -181,7 +181,7 @@ main(int argc, char **argv)
 		if (!ni_log_destination(program_name, opt_log_target)) {
 			fprintf(stderr, "Bad log destination \%s\"\n",
 					opt_log_target);
-			goto checkup;
+			goto done;
 		}
 	}
 	else if (opt_systemd || getppid() == 1 || !opt_foreground) { /* syslog only */
@@ -205,10 +205,7 @@ main(int argc, char **argv)
 
 	run_interface_server();
 
-checkup:
-	/* At this stage do not report errors in case of systemd execution */
-	if (opt_systemd)
-		status = NI_LSB_RC_SUCCESS;
+	status = NI_LSB_RC_SUCCESS;
 
 done:
 	return status;
