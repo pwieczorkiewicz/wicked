@@ -157,9 +157,10 @@ do_ifup(int argc, char **argv)
 			opt_persistent = TRUE;
 			break;
 
-		default:
 		case OPT_HELP:
-usage:
+			status = NI_LSB_RC_SUCCESS;
+		default:
+		usage:
 			fprintf(stderr,
 				"wicked [options] ifup [ifup-options] all\n"
 				"wicked [options] ifup [ifup-options] <ifname> ...\n"
@@ -271,6 +272,14 @@ usage:
 		/* No error if all interfaces were good */
 		status = ni_fsm_fail_count(fsm) ?
 			NI_LSB_RC_ERROR : NI_LSB_RC_SUCCESS;
+
+		/*
+		 * Do not report any transient errors to systemd (e.g. dhcp
+		 * or whatever not ready in time) -- returning an error may
+		 * cause to stop the network completely.
+		 */
+		if (opt_systemd)
+			status = NI_LSB_RC_SUCCESS;
 	}
 
 cleanup:
@@ -329,9 +338,10 @@ do_ifdown(int argc, char **argv)
 			}
 			break;
 
-		default:
 		case OPT_HELP:
-usage:
+			status = NI_LSB_RC_SUCCESS;
+		default:
+		usage:
 			fill_state_string(&sb, &target_range);
 			fprintf(stderr,
 				"wicked [options] ifdown [ifdown-options] all\n"
@@ -447,9 +457,10 @@ do_ifcheck(int argc, char **argv)
 			opt_persistent = TRUE;
 			break;
 
-		default:
 		case OPT_HELP:
-usage:
+			status = NI_LSB_RC_SUCCESS;
+		default:
+		usage:
 			fill_state_string(&sb, NULL);
 			fprintf(stderr,
 				"wicked [options] ifcheck [ifcheck-options] all\n"

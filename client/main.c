@@ -147,7 +147,7 @@ main(int argc, char **argv)
 			if (!ni_set_global_config_path(optarg)) {
 				fprintf(stderr, "Unable to set config file '%s': %m\n", optarg);
 				status = NI_LSB_RC_ERROR;
-				goto checkup;
+				goto done;
 			}
 			break;
 
@@ -160,7 +160,7 @@ main(int argc, char **argv)
 			}
 			if (ni_enable_debug(optarg) < 0) {
 				fprintf(stderr, "Bad debug facility \"%s\"\n", optarg);
-				goto checkup;
+				goto done;
 			}
 			break;
 
@@ -171,7 +171,7 @@ main(int argc, char **argv)
 		case OPT_LOG_LEVEL:
 			if (!ni_log_level_set(optarg)) {
 				fprintf(stderr, "Bad log level \%s\"\n", optarg);
-				goto checkup;
+				goto done;
 			}
 			break;
 
@@ -198,7 +198,7 @@ main(int argc, char **argv)
 		if (!ni_log_destination(program_name, opt_log_target)) {
 			fprintf(stderr, "Bad log destination \%s\"\n",
 				opt_log_target);
-			goto checkup;
+			goto done;
 		}
 	}
 	else if (opt_systemd || getppid() == 1) { /* syslog only */
@@ -246,11 +246,6 @@ main(int argc, char **argv)
 		fprintf(stderr, "Unsupported command %s\n", cmd);
 		goto usage;
 	}
-
-checkup:
-	/* At this stage do not report errors in case of systemd execution */
-	if (opt_systemd)
-		status = NI_LSB_RC_SUCCESS;
 
 done:
 	return status;
@@ -504,6 +499,7 @@ do_show_xml(int argc, char **argv)
 	int opt_raw = 0;
 	int opt_modems = 0;
 	int c, rv = 1;
+	int status = NI_LSB_RC_USAGE;
 
 	optind = 1;
 	while ((c = getopt_long(argc, argv, "", local_options, NULL)) != EOF) {
@@ -516,8 +512,9 @@ do_show_xml(int argc, char **argv)
 			opt_modems = 1;
 			break;
 
-		default:
 		case OPT_HELP:
+			status = NI_LSB_RC_SUCCESS;
+		default:
 		usage:
 			fprintf(stderr,
 				"wicked [options] show-xml [ifname]\n"
@@ -529,7 +526,7 @@ do_show_xml(int argc, char **argv)
 				"  --modem\n"
 				"      List Modems\n"
 				);
-			return 1;
+			return status;
 		}
 	}
 
@@ -540,8 +537,9 @@ do_show_xml(int argc, char **argv)
 	if (optind != argc)
 		goto usage;
 
+	status = NI_LSB_RC_ERROR;
 	if (!(object = ni_call_create_client()))
-		return 1;
+		goto out;
 
 	if (!opt_modems) {
 		if (!(list_object = ni_call_get_netif_list_object()))
@@ -579,11 +577,11 @@ do_show_xml(int argc, char **argv)
 		xml_node_free(tree);
 	}
 
-	rv = 0;
+	status = NI_LSB_RC_SUCCESS;
 
 out:
 	ni_dbus_variant_destroy(&result);
-	return rv;
+	return status;
 }
 
 int
@@ -592,6 +590,7 @@ do_show_config(int argc, char **argv, const char *root_schema)
 	xml_document_array_t docs = XML_DOCUMENT_ARRAY_INIT;
 	int opt_raw = 0;
 	const char *opt_output = NULL;
+	int status = NI_LSB_RC_USAGE;
 	unsigned i;
 	int c;
 
@@ -614,8 +613,10 @@ do_show_config(int argc, char **argv, const char *root_schema)
 			opt_output = optarg;
 			break;
 
-		default:
 		case OPT_HELP:
+			status = NI_LSB_RC_SUCCESS;
+		default:
+		usage:
 			fprintf(stderr,
 				"wicked [options] show-config [options] [SOURCE...]\n"
 				"Where SOURCE is one of the following:\n"
@@ -632,7 +633,7 @@ do_show_config(int argc, char **argv, const char *root_schema)
 				"  --output <path>\n"
 				"        Specify output file\n"
 				);
-			return 1;
+			return status;
 		}
 	}
 
@@ -646,7 +647,7 @@ do_show_config(int argc, char **argv, const char *root_schema)
 				if (!ni_ifconfig_read(&docs, opt_global_rootdir, cs_array->data[i], opt_raw)) {
 					ni_error("Unable to read config source from %s",
 						cs_array->data[i]);
-					return 1;
+					return NI_LSB_RC_ERROR;
 				}
 			}
 		}
@@ -661,7 +662,7 @@ do_show_config(int argc, char **argv, const char *root_schema)
 
 			if (!ni_ifconfig_read(&docs, opt_global_rootdir, path, opt_raw)) {
 				ni_error("Unable to read config source from %s", path);
-				return 1;
+				return NI_LSB_RC_ERROR;
 			}
 
 			if (root_schema)
@@ -743,13 +744,15 @@ do_show(int argc, char **argv)
 		{ NULL }
 	};
 	const char *ifname = NULL;
+	int status = NI_LSB_RC_USAGE;
 	int c, rv = 1;
 
 	optind = 1;
 	while ((c = getopt_long(argc, argv, "", options, NULL)) != EOF) {
 		switch (c) {
-		default:
 		case OPT_HELP:
+			status = NI_LSB_RC_SUCCESS;
+		default:
 		usage:
 			fprintf(stderr,
 				"wicked [options] show [ifname]\n"
@@ -757,7 +760,7 @@ do_show(int argc, char **argv)
 				"  --help\n"
 				"      Show this help text.\n"
 				);
-			return (c == OPT_HELP ? 0 : 1);
+			return status;
 		}
 	}
 
@@ -771,10 +774,10 @@ do_show(int argc, char **argv)
 		goto usage;
 
 	if (!(root_object = ni_call_create_client()))
-		return 1;
+		return NI_LSB_RC_ERROR;
 
 	if (!(list_object = get_netif_list_object()))
-		return 1;
+		return NI_LSB_RC_ERROR;
 
 	for (object = list_object->children; object; object = object->next) {
 		ni_netdev_t *ifp = object->handle;
@@ -831,9 +834,9 @@ do_show(int argc, char **argv)
 
 	if (ifname && rv != 0) {
 		ni_error("%s: unknown network interface", ifname);
-		return rv;
+		return NI_LSB_RC_NO_DEVICE;
 	}
-	return 0;
+	return NI_LSB_RC_SUCCESS;
 }
 
 /*
