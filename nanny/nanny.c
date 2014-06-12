@@ -843,8 +843,13 @@ ni_nanny_create_policy(ni_nanny_t *mgr, xml_node_t *pnode, ni_dbus_object_t **po
 		return -1;
 
 	pname = xml_node_get_attr(pnode, NI_NANNY_IFPOLICY_NAME);
-	if (ni_fsm_policy_by_name(mgr->fsm, pname) != NULL)
+	if (ni_fsm_policy_by_name(mgr->fsm, pname) != NULL) {
+		ni_ifworker_t *w = ni_fsm_ifworker_by_name(mgr->fsm, NI_IFWORKER_TYPE_NETDEV, pname);
+
+		if (!ni_ifworker_active(w))
+			ni_ifworker_reset(w);
 		return 1;
+	}
 
 	/* Create policy and corresponding worker (e.g. for hotplug or factory devices */
 	policy = ni_fsm_policy_new(mgr->fsm, pname, pnode);
