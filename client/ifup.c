@@ -43,6 +43,7 @@
 
 #include "wicked-client.h"
 #include "ifup.h"
+#include "ifstatus.h"
 
 static xml_node_t *
 __ni_ifup_generate_match(ni_ifworker_t *w)
@@ -196,7 +197,7 @@ ni_ifup_netif_state_change_signal_handler(ni_dbus_connection_t *conn, ni_dbus_me
 	ni_debug_application("received signal %s; object_path=%s",
 		signal_name, object_path);
 
-	if (event >= NI_EVENT_DEVICE_UP) {
+	if (event == NI_EVENT_ADDRESS_ACQUIRED) {
 		ni_string_array_t nsa = NI_STRING_ARRAY_INIT;
 		char ifname[IF_NAMESIZE+1] = { 0 };
 		unsigned int i, ifindex;
@@ -461,7 +462,7 @@ usage:
 cleanup:
 	ni_ifworker_array_destroy(&ifmarked);
 	ni_string_array_destroy(&opt_ifconfig);
-	return status;
+	return ni_do_ifstatus(argc, argv);
 }
 
 
