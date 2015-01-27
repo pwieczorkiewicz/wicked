@@ -143,7 +143,14 @@ __ni_config_parse(ni_config_t *conf, const char *filename, ni_init_appdata_callb
 		if (strcmp(child->name, "use-nanny") == 0) {
 			if (ni_parse_boolean(child->cdata, &conf->use_nanny)) {
 				ni_error("%s: invalid <%s>%s</%s> element value",
-					filename, child->name, child->name, child->cdata);
+					filename, child->name, child->cdata, child->name);
+				goto failed;
+			}
+		} else
+		if (strcmp(child->name, "high-watermark") == 0) {
+			if (ni_parse_uint(child->cdata, &conf->high_watermark, 10) < 0) {
+				ni_error("%s: invalid <%s>%s</%s> element value",
+					filename, child->name, child->cdata, child->name);
 				goto failed;
 			}
 		} else
@@ -1106,6 +1113,12 @@ ni_bool_t
 ni_config_use_nanny(void)
 {
 	return ni_global.config ? ni_global.config->use_nanny : FALSE;
+}
+
+ni_bool_t
+ni_config_is_high_watermark_set(void)
+{
+	return ni_global.config ? !!ni_global.config->high_watermark : FALSE;
 }
 
 void

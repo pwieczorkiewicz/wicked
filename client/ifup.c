@@ -433,7 +433,9 @@ ni_do_ifup_nanny(int argc, char **argv)
 
 	fsm = ni_fsm_new();
 	ni_assert(fsm);
+#if 0
 	ni_fsm_require_register_type("reachable", ni_ifworker_reachability_check_new);
+#endif
 
 	memset(&ifmatch, 0, sizeof(ifmatch));
 	memset(&ifmarked, 0, sizeof(ifmarked));
@@ -685,7 +687,9 @@ ni_do_ifup_direct(int argc, char **argv)
 
 	fsm = ni_fsm_new();
 	ni_assert(fsm);
+#if 0
 	ni_fsm_require_register_type("reachable", ni_ifworker_reachability_check_new);
+#endif
 
 	memset(&ifmatch, 0, sizeof(ifmatch));
 	memset(&ifmarker, 0, sizeof(ifmarker));

@@ -35,6 +35,15 @@ typedef enum ni_fsm_state {
 	__NI_FSM_STATE_MAX
 } ni_fsm_state_t;
 
+typedef enum ni_fsm_watermark {
+	NI_FSM_WATERMARK_BOTTOM = 0,
+	NI_FSM_WATERMARK_DEFAULT_LOW = 5,
+	NI_FSM_WATERMARK_DEFAULT_HIGH = 20,
+	NI_FSM_WATERMARK_OFF = -1UL,
+} ni_fsm_watermark_t;
+
+#define NI_FSM_WATERMARK_TIMEOUT 10000
+
 typedef enum ni_config_origin_prio {
 	NI_CONFIG_ORIGIN_PRIO_FIRMWARE,
 	NI_CONFIG_ORIGIN_PRIO_COMPAT,

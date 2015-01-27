@@ -127,7 +127,9 @@ ni_do_ifdown(int argc, char **argv)
 
 	fsm = ni_fsm_new();
 	ni_assert(fsm);
+#if 0
 	ni_fsm_require_register_type("reachable", ni_ifworker_reachability_check_new);
+#endif
 
 	/* Allow ifdown only on non-persistent interfaces previously configured by ifup */
 	memset(&ifmatch, 0, sizeof(ifmatch));

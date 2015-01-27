@@ -95,7 +95,9 @@ ni_do_ifreload_direct(int argc, char **argv)
 
 	fsm = ni_fsm_new();
 	ni_assert(fsm);
+#if 0
 	ni_fsm_require_register_type("reachable", ni_ifworker_reachability_check_new);
+#endif
 
 	optind = 1;
 	while ((c = getopt_long(argc, argv, "", ifreload_options, NULL)) != EOF) {
@@ -413,7 +415,9 @@ ni_do_ifreload_nanny(int argc, char **argv)
 
 	fsm = ni_fsm_new();
 	ni_assert(fsm);
+#if 0
 	ni_fsm_require_register_type("reachable", ni_ifworker_reachability_check_new);
+#endif
 
 	optind = 1;
 	while ((c = getopt_long(argc, argv, "", ifreload_options, NULL)) != EOF) {

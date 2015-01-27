@@ -29,6 +29,22 @@
   <use-nanny>false</use-nanny>
 
   <!--
+    Set high watermark level:
+
+    This value determines how many actions of started device
+    workers are allowed in parallel (i.e. how many workers
+    are able to perform actions affecting the system in
+    parallel).
+    This setting is suppose to address issues with high load
+    of netlink buffer, since each action can potentially
+    cause 1 or more netlink events being transmitted.
+
+    Change as per your system need.
+    Default set to 20.
+  -->
+  <high-watermark>20</high-watermark>
+
+  <!--
     If you want to make changes to this file, consider putting
     your changes into @wicked_configdir@/local.xml instead.
     Otherwise, you may lose your changes when applying

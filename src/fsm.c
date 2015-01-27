@@ -28,10 +28,17 @@
 
 #include "client/ifconfig.h"
 #include "util_priv.h"
+#include "appconfig.h"
 
 static unsigned int		ni_ifworker_timeout_count;
 static ni_fsm_user_prompt_fn_t *ni_fsm_user_prompt_fn;
 static void *			ni_fsm_user_prompt_data;
+static struct {
+	ni_fsm_watermark_t	level;
+	const ni_timer_t	*timer;
+	unsigned int		high;
+	unsigned int		orig;
+} fsm_watermark;
 
 static ni_ifworker_t *		ni_ifworker_identify_device(ni_fsm_t *, const xml_node_t *, ni_ifworker_type_t, const char *);
 static ni_ifworker_t *		__ni_ifworker_identify_device(ni_fsm_t *, const char *, const xml_node_t *, ni_ifworker_type_t, const char *);
@@ -56,6 +63,9 @@ static void			ni_ifworker_cancel_timeout(ni_ifworker_t *);
 static dbus_bool_t		ni_ifworker_waiting_for_events(ni_ifworker_t *);
 static void			ni_ifworker_advance_state(ni_ifworker_t *, ni_event_t);
 
+static void			ni_fsm_watermark_increase(void);
+static void			ni_fsm_watermark_decrease(void);
+
 static void			ni_ifworker_update_client_state_control(ni_ifworker_t *w);
 static inline void		ni_ifworker_update_client_state_config(ni_ifworker_t *w);
 
@@ -64,8 +74,11 @@ ni_fsm_new(void)
 {
 	ni_fsm_t *fsm;
 
-	fsm = calloc(1, sizeof(*fsm));
-	fsm->readonly = FALSE;
+	fsm = xcalloc(1, sizeof(*fsm));
+
+	fsm_watermark.high = ni_config_is_high_watermark_set() ?
+		ni_global.config->high_watermark : NI_FSM_WATERMARK_DEFAULT_HIGH;
+	fsm_watermark.orig = fsm_watermark.high;
 
 	ni_fsm_user_prompt_fn = ni_fsm_user_prompt_default;
 	return fsm;
@@ -146,6 +159,8 @@ __ni_ifworker_reset_fsm(ni_ifworker_t *w)
 	w->fsm.action_table = NULL;
 
 	req_list = w->fsm.child_state_req_list;
+	if (w->fsm.wait_for)
+		ni_fsm_watermark_decrease();
 	memset(&w->fsm, 0, sizeof(w->fsm));
 	w->fsm.child_state_req_list = req_list;
 }
@@ -375,6 +390,10 @@ ni_ifworker_fail(ni_ifworker_t *w, const char *fmt, ...)
 
 	if (w->progress.callback)
 		w->progress.callback(w, w->fsm.state);
+	if (w->fsm.wait_for) {
+		ni_fsm_watermark_decrease();
+		w->fsm.wait_for = NULL;
+	}
 
 	__ni_ifworker_done(w);
 }
@@ -429,31 +448,66 @@ __ni_ifworker_timeout(void *user_data, const ni_timer_t *timer)
 	ni_ifworker_timeout_count++;
 }
 
-static void
-ni_ifworker_cancel_timeout(ni_ifworker_t *w)
+static inline ni_bool_t
+__ni_fsm_cancel_timeout(const ni_timer_t **timer)
 {
-	if (w->fsm.timer) {
-		ni_timer_cancel(w->fsm.timer);
-		w->fsm.timer = NULL;
-		ni_debug_application("%s: cancel timeout", w->name);
+	if (timer && *timer) {
+		ni_timer_cancel(*timer);
+		*timer = NULL;
+		return TRUE;
 	}
+
+	return FALSE;
 }
 
-static void
+static inline void
+__ni_fsm_set_timeout(const ni_timer_t **timer, unsigned long timeout_ms, void (*handler)(void *, const ni_timer_t *), void *data)
+{
+	if (timer && handler && timeout_ms && timeout_ms != NI_IFWORKER_INFINITE_TIMEOUT)
+		*timer = ni_timer_register(timeout_ms, handler, data);
+}
+
+static inline void
+ni_ifworker_cancel_timeout(ni_ifworker_t *w)
+{
+	if (__ni_fsm_cancel_timeout(&w->fsm.timer))
+		ni_debug_application("%s: cancel worker's timeout", w->name);
+}
+
+static inline void
 ni_ifworker_set_timeout(ni_ifworker_t *w, unsigned long timeout_ms)
 {
 	ni_ifworker_cancel_timeout(w);
-	if (timeout_ms && timeout_ms != NI_IFWORKER_INFINITE_TIMEOUT)
-		w->fsm.timer = ni_timer_register(timeout_ms, __ni_ifworker_timeout, w);
+	__ni_fsm_set_timeout(&w->fsm.timer, timeout_ms, __ni_ifworker_timeout, w);
+}
+
+static inline void
+ni_ifworker_set_secondary_timeout(ni_ifworker_t *w, unsigned long timeout_ms, void (*handler)(void *, const ni_timer_t *))
+{
+	__ni_fsm_cancel_timeout(&w->fsm.secondary_timer);
+	__ni_fsm_set_timeout(&w->fsm.secondary_timer, timeout_ms, handler, w);
 }
 
 static void
-ni_ifworker_set_secondary_timeout(ni_ifworker_t *w, unsigned long timeout_ms, void (*handler)(void *, const ni_timer_t *))
+__ni_fsm_watermark_timeout(void *user_data, const ni_timer_t *timer)
 {
-	if (w->fsm.secondary_timer)
-		ni_timer_cancel(w->fsm.secondary_timer);
-	if (handler && timeout_ms && timeout_ms != NI_IFWORKER_INFINITE_TIMEOUT)
-		w->fsm.secondary_timer = ni_timer_register(timeout_ms, handler, w);
+	if (fsm_watermark.timer != timer) {
+		ni_error("%s called with unexpected timer", __func__);
+		return;
+	}
+	else {
+		fsm_watermark.timer = NULL;
+
+		fsm_watermark.high += (fsm_watermark.level-(fsm_watermark.high-fsm_watermark.orig));
+		ni_error("Watermark timer has expired - increasing high limit to ignore pending actions");
+	}
+}
+
+static inline void
+ni_fsm_set_watermark_timeout(void)
+{
+	__ni_fsm_cancel_timeout(&fsm_watermark.timer);
+	__ni_fsm_set_timeout(&fsm_watermark.timer, NI_FSM_WATERMARK_TIMEOUT,__ni_fsm_watermark_timeout, NULL);
 }
 
 static ni_intmap_t __state_names[] = {
@@ -1297,8 +1351,10 @@ ni_ifworker_set_state(ni_ifworker_t *w, unsigned int new_state)
 				(w->fsm.wait_for->next_state == w->fsm.state?
 					", resuming activity" : ", still waiting for event"));
 
-		if (w->fsm.wait_for && w->fsm.wait_for->next_state == new_state)
+		if (w->fsm.wait_for && w->fsm.wait_for->next_state == new_state) {
+			ni_fsm_watermark_decrease();
 			w->fsm.wait_for = NULL;
+		}
 
 		if ((new_state == NI_FSM_STATE_DEVICE_READY ||
 		    new_state == NI_FSM_STATE_DEVICE_UP) && w->object && !w->readonly) {
@@ -1709,6 +1765,68 @@ ni_fsm_workers_from_xml(ni_fsm_t *fsm, xml_node_t *ifnode, const char *origin)
 	ni_ifworker_set_config(w, ifnode, origin);
 
 	return TRUE;
+}
+
+static void
+ni_fsm_watermark_increase(void)
+{
+	if (NI_FSM_WATERMARK_OFF == fsm_watermark.level) {
+		__ni_fsm_cancel_timeout(&fsm_watermark.timer);
+		return;
+	}
+
+	if (fsm_watermark.level == fsm_watermark.high) {
+		ni_error("%s: watermark was already high - nothing should be casuing this", __func__);
+		return;
+	}
+
+	fsm_watermark.level++;
+	if (fsm_watermark.level == fsm_watermark.high)
+		ni_debug_application("%s: high watermark condition", __func__);
+
+	ni_fsm_set_watermark_timeout();
+}
+
+static void
+ni_fsm_watermark_decrease(void)
+{
+	if (NI_FSM_WATERMARK_OFF == fsm_watermark.level) {
+		__ni_fsm_cancel_timeout(&fsm_watermark.timer);
+		return;
+	}
+
+	if (NI_FSM_WATERMARK_BOTTOM == fsm_watermark.level) {
+		ni_error("%s: watermark was already at the bottom - nothing should be casuing this", __func__);
+		return;
+	}
+
+	if (fsm_watermark.level == fsm_watermark.high)
+		ni_debug_application("%s: watermark no longer high", __func__);
+	if (fsm_watermark.level == (fsm_watermark.high-fsm_watermark.orig))
+		fsm_watermark.high--;
+	fsm_watermark.level--;
+
+	if (NI_FSM_WATERMARK_BOTTOM == fsm_watermark.level) {
+		ni_assert(fsm_watermark.high == fsm_watermark.orig);
+		__ni_fsm_cancel_timeout(&fsm_watermark.timer);
+	}
+	else
+		ni_fsm_set_watermark_timeout();
+}
+
+/*
+ * Handle watermark requirement
+ */
+static ni_bool_t
+ni_ifworker_check_watermark(ni_ifworker_t *w)
+{
+	if (NI_FSM_WATERMARK_OFF == fsm_watermark.level)
+		return TRUE;
+
+	if (fsm_watermark.level < fsm_watermark.high)
+		return TRUE;
+
+	return FALSE;
 }
 
 /*
@@ -3789,14 +3907,18 @@ ni_ifworker_do_common(ni_fsm_t *fsm, ni_ifworker_t *w, ni_fsm_transition_t *acti
 		}
 	}
 
-	/* Reset wait_for this action if there are no callbacks */
-	if (count == 0)
-		w->fsm.wait_for = NULL;
+	/* Do not set state if there are callbacks */
+	if (count == 0) {
+		ni_ifworker_set_state(w, action->next_state);
+		if (w->fsm.wait_for != NULL) {
+			ni_debug_application("%s: transition from %s to %s state has taken place asynchronously already",
+				w->name, ni_ifworker_state_name(w->fsm.wait_for->from_state),
+				ni_ifworker_state_name(w->fsm.wait_for->next_state));
+			w->fsm.wait_for = NULL;
+			ni_fsm_watermark_decrease();
+		}
+	}
 
-	if (w->fsm.wait_for != NULL)
-		return 0;
-
-	ni_ifworker_set_state(w, action->next_state);
 	return 0;
 }
 
@@ -3839,6 +3961,9 @@ ni_ifworker_bind_device_factory(ni_fsm_t *fsm, ni_ifworker_t *w, ni_fsm_transiti
 static int
 ni_ifworker_call_device_factory(ni_fsm_t *fsm, ni_ifworker_t *w, ni_fsm_transition_t *action)
 {
+	/* Initially, enable waiting for this action */
+	w->fsm.wait_for = action;
+
 	if (!ni_ifworker_device_bound(w)) {
 		struct ni_fsm_transition_binding *bind;
 		const char *relative_path;
@@ -4150,14 +4275,22 @@ ni_fsm_schedule(ni_fsm_t *fsm)
 				continue;
 			}
 
+			if (!ni_ifworker_check_watermark(w)) {
+				ni_debug_application("%s: defer action (watermark high)", w->name);
+				continue;
+			}
+
 			ni_ifworker_set_secondary_timeout(w, 0, NULL);
 
 			prev_state = w->fsm.state;
+			ni_fsm_watermark_increase();
 			rv = action->func(fsm, w, action);
 			w->fsm.next_action++;
 
 			if (rv >= 0) {
 				made_progress = 1;
+				if (w->fsm.timer)
+					ni_ifworker_set_timeout(w, fsm->worker_timeout);
 				if (w->fsm.state == action->next_state) {
 					/* We should not have transitioned to the next state while
 					 * we were still waiting for some event. */

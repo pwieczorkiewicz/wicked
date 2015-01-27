@@ -80,6 +80,7 @@ typedef struct ni_config {
 	ni_config_fslocation_t	statedir;
 	ni_config_fslocation_t	backupdir;
 	ni_bool_t		use_nanny;
+	unsigned int		high_watermark;
 
 	struct {
 	    unsigned int		default_allow_update;
@@ -138,6 +139,7 @@ extern ni_config_t *	ni_config_parse(const char *, ni_init_appdata_callback_t *,
 extern ni_extension_t *	ni_config_find_extension(ni_config_t *, const char *);
 extern ni_extension_t *	ni_config_find_system_updater(ni_config_t *, const char *);
 extern unsigned int	ni_config_addrconf_update_mask(ni_addrconf_mode_t, unsigned int);
+extern ni_bool_t	ni_config_is_high_watermark_set(void);
 extern ni_bool_t	ni_config_use_nanny(void);
 
 extern ni_extension_t *	ni_extension_list_find(ni_extension_t *, const char *);
