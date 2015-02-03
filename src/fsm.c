@@ -1326,68 +1326,53 @@ ni_ifworker_set_state(ni_ifworker_t *w, unsigned int new_state)
 }
 
 static void
-ni_ifworker_update_state(ni_ifworker_t *w, unsigned int min_state, unsigned int max_state)
-{
-	unsigned int new_state = w->fsm.state;
-
-	if (new_state < min_state)
-		new_state = min_state;
-	if (max_state < new_state)
-		new_state = max_state;
-
-	if (w->fsm.state != new_state)
-		ni_ifworker_set_state(w, new_state);
-
-}
-
-static void
 ni_ifworker_advance_state(ni_ifworker_t *w, ni_event_t event_type)
 {
-	unsigned int min_state = NI_FSM_STATE_NONE, max_state = __NI_FSM_STATE_MAX;
+	unsigned int state = NI_FSM_STATE_NONE;
 
 	switch (event_type) {
 	case NI_EVENT_DEVICE_DOWN:
 		/* We should restart FSM on successful devices */
+		state = NI_FSM_STATE_DEVICE_UP - 1;
 		if (ni_ifworker_complete(w))
 			ni_ifworker_rearm(w);
 		max_state = NI_FSM_STATE_DEVICE_UP - 1;
 		break;
 	case NI_EVENT_DEVICE_CREATE:
-		min_state = NI_FSM_STATE_DEVICE_EXISTS;
+		state = NI_FSM_STATE_DEVICE_EXISTS;
 		break;
 	case NI_EVENT_DEVICE_READY:
-		min_state = NI_FSM_STATE_DEVICE_READY;
+		state = NI_FSM_STATE_DEVICE_READY;
 		break;
 	case NI_EVENT_DEVICE_UP:
-		min_state = NI_FSM_STATE_DEVICE_UP;
+		state = NI_FSM_STATE_DEVICE_UP;
 		break;
 	case NI_EVENT_LINK_UP:
-		min_state = NI_FSM_STATE_LINK_UP;
+		state = NI_FSM_STATE_LINK_UP;
 		break;
 	case NI_EVENT_LINK_DOWN:
 		/* We should restart FSM on successful devices */
 		if (ni_ifworker_complete(w))
 			ni_ifworker_rearm(w);
-		max_state = NI_FSM_STATE_LINK_UP - 1;
+		state = NI_FSM_STATE_LINK_UP - 1;
 		break;
 	case NI_EVENT_ADDRESS_DEFERRED:
 	case NI_EVENT_ADDRESS_ACQUIRED:
-		min_state = NI_FSM_STATE_ADDRCONF_UP;
+		state = NI_FSM_STATE_ADDRCONF_UP;
 		break;
 	case NI_EVENT_ADDRESS_RELEASED:
-		max_state = NI_FSM_STATE_ADDRCONF_UP - 1;
+		state = NI_FSM_STATE_ADDRCONF_UP - 1;
 		break;
 	default:
-		break;
+		return;
 	}
 
 	ni_debug_verbose(NI_LOG_DEBUG1, NI_TRACE_APPLICATION,
-		"%s: advance fsm state by signal %s: <%s..%s>", w->name,
+		"%s: advance fsm state by signal %s: <%s>", w->name,
 		ni_objectmodel_event_to_signal(event_type),
-		ni_ifworker_state_name(min_state),
-		ni_ifworker_state_name(max_state));
+		ni_ifworker_state_name(state));
 
-	ni_ifworker_update_state(w, min_state, max_state);
+	ni_ifworker_set_state(w, state);
 }
 
 static void
@@ -3092,8 +3077,8 @@ ni_fsm_refresh_state(ni_fsm_t *fsm)
 		ni_fsm_refresh_lower_dev(fsm, w);
 
 		/* Set initial state of existing devices */
-		if (w->object != NULL)
-			ni_ifworker_update_state(w, NI_FSM_STATE_DEVICE_EXISTS, __NI_FSM_STATE_MAX);
+		if (w->object != NULL && !ni_ifworker_complete(w))
+			ni_ifworker_set_state(w, NI_FSM_STATE_DEVICE_EXISTS);
 	}
 
 	return TRUE;
@@ -3250,10 +3235,6 @@ ni_fsm_recv_new_modem(ni_fsm_t *fsm, ni_dbus_object_t *object, ni_bool_t refresh
 	if (!found->modem)
 		found->modem = ni_modem_hold(modem);
 	found->object = object;
-
-	/* Don't touch devices we're done with */
-	if (!found->done)
-		ni_ifworker_update_state(found, NI_FSM_STATE_DEVICE_EXISTS, __NI_FSM_STATE_MAX);
 
 	return found;
 }
