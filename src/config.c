@@ -71,7 +71,7 @@ ni_config_new()
 
 	conf->use_nanny = FALSE;
 
-	conf->rtnl_event.recv_buff_length = 1024 * 1024;
+	conf->rtnl_event.recv_buff_length = 10 * 1024;
 	conf->rtnl_event.mesg_buff_length = 0;
 
 	return conf;
