@@ -1348,9 +1348,9 @@ ni_ifworker_advance_state(ni_ifworker_t *w, ni_event_t event_type)
 	switch (event_type) {
 	case NI_EVENT_DEVICE_DOWN:
 		/* We should restart FSM on successful devices */
-		min_state = NI_FSM_STATE_DEVICE_UP - 1;
 		if (ni_ifworker_complete(w))
 			ni_ifworker_rearm(w);
+		max_state = NI_FSM_STATE_DEVICE_UP - 1;
 		break;
 	case NI_EVENT_DEVICE_CREATE:
 		min_state = NI_FSM_STATE_DEVICE_EXISTS;
