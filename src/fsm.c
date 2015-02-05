@@ -1346,17 +1346,18 @@ ni_ifworker_advance_state(ni_ifworker_t *w, ni_event_t event_type)
 	unsigned int min_state = NI_FSM_STATE_NONE, max_state = __NI_FSM_STATE_MAX;
 
 	switch (event_type) {
-	case NI_EVENT_DEVICE_DOWN:
-		/* We should restart FSM on successful devices */
-		if (ni_ifworker_complete(w))
-			ni_ifworker_rearm(w);
-		max_state = NI_FSM_STATE_DEVICE_UP - 1;
 		break;
 	case NI_EVENT_DEVICE_CREATE:
 		min_state = NI_FSM_STATE_DEVICE_EXISTS;
 		break;
 	case NI_EVENT_DEVICE_READY:
 		min_state = NI_FSM_STATE_DEVICE_READY;
+		break;
+	case NI_EVENT_DEVICE_DOWN:
+		/* We should restart FSM on successful devices */
+		if (ni_ifworker_complete(w))
+			ni_ifworker_rearm(w);
+		max_state = NI_FSM_STATE_DEVICE_UP - 1;
 		break;
 	case NI_EVENT_DEVICE_UP:
 		min_state = NI_FSM_STATE_DEVICE_UP;
