@@ -471,7 +471,7 @@ ni_ifworker_set_secondary_timeout(ni_ifworker_t *w, unsigned long timeout_ms, vo
 
 static ni_intmap_t __state_names[] = {
 	{ "none",		NI_FSM_STATE_NONE		},
-	{ "device-down",	NI_FSM_STATE_DEVICE_DOWN	},
+	{ "device-deleted",	NI_FSM_STATE_DEVICE_DELETED	},
 	{ "device-exists",	NI_FSM_STATE_DEVICE_EXISTS	},
 	{ "device-ready",	NI_FSM_STATE_DEVICE_READY	},
 	{ "device-setup",	NI_FSM_STATE_DEVICE_SETUP	},
@@ -2494,7 +2494,7 @@ ni_fsm_reset_matching_workers(ni_fsm_t *fsm, ni_ifworker_array_t *marked,
 		ni_ifworker_t *w = marked->data[i];
 
 		if ((w->done || w->failed) &&
-		    (w->target_range.max == NI_FSM_STATE_DEVICE_DOWN)) {
+		    (w->target_range.max == NI_FSM_STATE_DEVICE_DELETED)) {
 			ni_fsm_destroy_worker(fsm, w);
 			if (ni_ifworker_array_remove(marked, w))
 				--i;
@@ -2600,7 +2600,7 @@ ni_ifworker_start(ni_fsm_t *fsm, ni_ifworker_t *w, unsigned long timeout)
 			return 0;
 
 		/* No upper bound; bring it up to min level */
-		rv = ni_fsm_schedule_init(fsm, w, NI_FSM_STATE_DEVICE_DOWN, min_state);
+		rv = ni_fsm_schedule_init(fsm, w, NI_FSM_STATE_DEVICE_DELETED, min_state);
 		if (rv < 0)
 			return rv;
 	} else if (min_state == NI_FSM_STATE_NONE) {
@@ -4009,7 +4009,7 @@ ni_fsm_schedule_init(ni_fsm_t *fsm, ni_ifworker_t *w, unsigned int from_state, u
 		increment = -1;
 
 		/* ifdown: when device cannot be deleted, don't try. */
-		if (NI_FSM_STATE_DEVICE_DOWN == target_state) {
+		if (NI_FSM_STATE_DEVICE_DELETED == target_state) {
 			if (!ni_ifworker_can_delete(w))
 				target_state = NI_FSM_STATE_DEVICE_READY;
 			else
@@ -4123,7 +4123,7 @@ ni_fsm_schedule(ni_fsm_t *fsm)
 
 			if (!w->kickstarted) {
 				if (!ni_ifworker_device_bound(w))
-					ni_ifworker_set_state(w, NI_FSM_STATE_DEVICE_DOWN);
+					ni_ifworker_set_state(w, NI_FSM_STATE_DEVICE_DELETED);
 				else if (w->object)
 					ni_call_clear_event_filters(w->object);
 				w->kickstarted = TRUE;

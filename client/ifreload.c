@@ -303,7 +303,7 @@ usage:
 		} else
 		if (ni_ifcheck_device_configured(dev)) {
 			w->target_range.min = NI_FSM_STATE_NONE;
-			w->target_range.max = NI_FSM_STATE_DEVICE_DOWN;
+			w->target_range.max = NI_FSM_STATE_DEVICE_DELETED;
 			nmarked++;
 		}
 	}
@@ -617,7 +617,7 @@ usage:
 		} else
 		if (ni_ifcheck_device_configured(dev)) {
 			w->target_range.min = NI_FSM_STATE_NONE;
-			w->target_range.max = NI_FSM_STATE_DEVICE_DOWN;
+			w->target_range.max = NI_FSM_STATE_DEVICE_DELETED;
 			nmarked++;
 		}
 	}

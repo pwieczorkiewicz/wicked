@@ -486,7 +486,7 @@ ni_managed_device_down(ni_managed_device_t *mdev)
 
 	ni_ifworker_set_config(w, mdev->selected_config, w->config.meta.origin);
 	w->target_range.min = NI_FSM_STATE_NONE;
-	w->target_range.max = NI_FSM_STATE_DEVICE_DOWN;
+	w->target_range.max = NI_FSM_STATE_DEVICE_DELETED;
 
 	if ((rv = ni_ifworker_start(fsm, w, fsm->worker_timeout)) >= 0) {
 		mdev->state = NI_MANAGED_STATE_STOPPING;

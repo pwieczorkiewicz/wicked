@@ -119,7 +119,7 @@ ni_do_ifdown(int argc, char **argv)
 	ni_ifmarker_t ifmarker;
 	ni_ifworker_array_t ifmarked;
 	ni_string_array_t ifnames = NI_STRING_ARRAY_INIT;
-	unsigned int nmarked, max_state = NI_FSM_STATE_DEVICE_DOWN;
+	unsigned int nmarked, max_state = NI_FSM_STATE_DEVICE_DELETED;
 	unsigned int timeout = NI_IFWORKER_DEFAULT_TIMEOUT;
 	ni_stringbuf_t sb = NI_STRINGBUF_INIT_DYNAMIC;
 	ni_fsm_t *fsm;
@@ -138,7 +138,7 @@ ni_do_ifdown(int argc, char **argv)
 	ifmatch.allow_persistent = FALSE;
 	ifmatch.require_config = FALSE;
 
-	ifmarker.target_range.min = NI_FSM_STATE_DEVICE_DOWN;
+	ifmarker.target_range.min = NI_FSM_STATE_DEVICE_DELETED;
 	ifmarker.target_range.max = __NI_FSM_STATE_MAX - 2;
 
 	optind = 1;
@@ -157,7 +157,7 @@ ni_do_ifdown(int argc, char **argv)
 			break;
 
 		case OPT_DELETE:
-			max_state = NI_FSM_STATE_DEVICE_DOWN;
+			max_state = NI_FSM_STATE_DEVICE_DELETED;
 			/* Allow ifdown on persistent, unconfigured interfaces */
 			ifmatch.require_configured = FALSE;
 			ifmatch.allow_persistent = TRUE;
