@@ -3930,11 +3930,11 @@ static ni_fsm_transition_t	ni_iftransitions[] = {
 		__TRANSITION_UP_TO(NI_FSM_STATE_DEVICE_EXISTS),
 		.bind_func = ni_ifworker_bind_device_factory,
 		.func = ni_ifworker_call_device_factory,
-		.common = { .method_name = "newDevice" },
+		.common = { .method_name = "newDevice", .need_ack = TRUE },
 	},
 
 	/* This state waits to become ready to set up, e.g. udev renamed */
-	COMMON_TRANSITION_UP_TO(NI_FSM_STATE_DEVICE_READY, "waitDeviceReady", .call_overloading = TRUE),
+	COMMON_TRANSITION_UP_TO(NI_FSM_STATE_DEVICE_READY, "waitDeviceReady", .call_overloading = TRUE, .need_ack = TRUE),
 
 	/* This sets any device attributes, such as a MAC address */
 	COMMON_TRANSITION_UP_TO(NI_FSM_STATE_DEVICE_SETUP, "changeDevice", .call_overloading = TRUE),
@@ -3950,11 +3950,11 @@ static ni_fsm_transition_t	ni_iftransitions[] = {
 	 * queue length etc., sets the link administratively UP what triggers a
 	 * link negotiation / detection in the kernel.
 	 */
-	COMMON_TRANSITION_UP_TO(NI_FSM_STATE_DEVICE_UP, "linkUp", .call_overloading = TRUE),
+	COMMON_TRANSITION_UP_TO(NI_FSM_STATE_DEVICE_UP, "linkUp", .call_overloading = TRUE, .need_ack = TRUE),
 
 	/* This state causes to wait unlit the link negotiation / detection finished
 	 * and we can start using it, that is authenticate ... request IP setup. */
-	COMMON_TRANSITION_UP_TO(NI_FSM_STATE_LINK_UP, "waitLinkUp", .call_overloading = TRUE),
+	COMMON_TRANSITION_UP_TO(NI_FSM_STATE_LINK_UP, "waitLinkUp", .call_overloading = TRUE, .need_ack = TRUE),
 
 	/* If the link requires authentication, this information can be provided
 	 * here; for instance ethernet 802.1x, wireless WPA, or PPP chap/pap.
@@ -3966,19 +3966,19 @@ static ni_fsm_transition_t	ni_iftransitions[] = {
 	COMMON_TRANSITION_UP_TO(NI_FSM_STATE_LLDP_UP, "lldpUp", .call_overloading = TRUE, .may_fail = TRUE),
 
 	/* Configure all assigned addresses and bring up the network */
-	COMMON_TRANSITION_UP_TO(NI_FSM_STATE_ADDRCONF_UP, "requestLease"),
+	COMMON_TRANSITION_UP_TO(NI_FSM_STATE_ADDRCONF_UP, "requestLease", .need_ack = TRUE),
 
 	/* -------------------------------------- *
 	 * Transitions for bringing down a device
 	 * -------------------------------------- */
 	/* Remove all assigned addresses and bring down the network */
-	COMMON_TRANSITION_DOWN_FROM(NI_FSM_STATE_ADDRCONF_UP, "dropLease"),
+	COMMON_TRANSITION_DOWN_FROM(NI_FSM_STATE_ADDRCONF_UP, "dropLease", .need_ack = TRUE),
 
 	/* Shut down the LLDP sender */
 	COMMON_TRANSITION_DOWN_FROM(NI_FSM_STATE_LLDP_UP, "lldpDown", .call_overloading = TRUE, .may_fail = TRUE),
 
 	/* Shut down the link */
-	COMMON_TRANSITION_DOWN_FROM(NI_FSM_STATE_DEVICE_UP, "linkDown", .call_overloading = TRUE),
+	COMMON_TRANSITION_DOWN_FROM(NI_FSM_STATE_DEVICE_UP, "linkDown", .call_overloading = TRUE, .need_ack = TRUE),
 
 	/* Shut down the firewall */
 	COMMON_TRANSITION_DOWN_FROM(NI_FSM_STATE_FIREWALL_UP, "firewallDown"),
@@ -3987,7 +3987,7 @@ static ni_fsm_transition_t	ni_iftransitions[] = {
 	COMMON_TRANSITION_DOWN_FROM(NI_FSM_STATE_DEVICE_SETUP, "shutdownDevice", .call_overloading = TRUE),
 
 	/* Delete the device */
-	COMMON_TRANSITION_DOWN_FROM(NI_FSM_STATE_DEVICE_EXISTS, "deleteDevice", .call_overloading = TRUE),
+	COMMON_TRANSITION_DOWN_FROM(NI_FSM_STATE_DEVICE_EXISTS, "deleteDevice", .call_overloading = TRUE, .need_ack = TRUE),
 
 	{ .from_state = NI_FSM_STATE_NONE, .next_state = NI_FSM_STATE_NONE, .func = NULL }
 };
