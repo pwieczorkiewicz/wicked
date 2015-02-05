@@ -3872,15 +3872,14 @@ ni_ifworker_call_device_factory(ni_fsm_t *fsm, ni_ifworker_t *w, ni_fsm_transiti
 		}
 		bind = &action->binding[0];
 
-		ni_debug_application("%s: calling device factory", w->name);
+		ni_debug_application("%s: calling %s.%s() device factory", w->name,
+				bind->service->name, bind->method->name);
+
 		object_path = ni_call_device_new_xml(bind->service, w->name, bind->config);
 		if (object_path == NULL) {
 			ni_ifworker_fail(w, "failed to create interface");
 			return -1;
 		}
-
-		ni_debug_application("created device %s (path=%s)", w->name, object_path);
-		ni_string_dup(&w->object_path, object_path);
 
 		relative_path = ni_string_strip_prefix(NI_OBJECTMODEL_OBJECT_PATH "/", object_path);
 		if (relative_path == NULL) {
@@ -3889,22 +3888,9 @@ ni_ifworker_call_device_factory(ni_fsm_t *fsm, ni_ifworker_t *w, ni_fsm_transiti
 			return -1;
 		}
 
-		/* Lookup the object corresponding to this path. If it doesn't
-		 * exist, create it on the fly (with a generic class of "netif" -
-		 * the next refresh call with take care of this and correct the
-		 * class */
-		w->object = ni_dbus_object_create(fsm->client_root_object, relative_path,
-					NULL,
-					NULL);
-
-		ni_string_free(&object_path);
-
-		if (!ni_dbus_object_refresh_children(w->object)) {
-			ni_ifworker_fail(w, "unable to refresh new device");
-			return -1;
-		}
-
-		ni_fsm_schedule_bind_methods(fsm, w);
+		ni_debug_application("registered created device %s (path=%s)", w->name, object_path);
+		ni_string_free(&w->object_path);
+		w->object_path = object_path;
 	}
 	else
 		ni_ifworker_set_state(w, action->next_state);
