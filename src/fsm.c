@@ -3812,9 +3812,13 @@ ni_ifworker_do_common(ni_fsm_t *fsm, ni_ifworker_t *w, ni_fsm_transition_t *acti
 	}
 
 	/* Reset wait_for this action if there are no callbacks */
-	if (count == 0 && !action->common.need_ack)
-		ni_ifworker_set_state(w, action->next_state);
+	if (count == 0)
+		w->fsm.wait_for = NULL;
 
+	if (w->fsm.wait_for || action->common.need_ack)
+		return 0;
+
+	ni_ifworker_set_state(w, action->next_state);
 	return 0;
 }
 
@@ -3971,7 +3975,7 @@ static ni_fsm_transition_t	ni_iftransitions[] = {
 	 * Transitions for bringing down a device
 	 * -------------------------------------- */
 	/* Remove all assigned addresses and bring down the network */
-	COMMON_TRANSITION_DOWN_FROM(NI_FSM_STATE_ADDRCONF_UP, "dropLease", .need_ack = TRUE),
+	COMMON_TRANSITION_DOWN_FROM(NI_FSM_STATE_ADDRCONF_UP, "dropLease"),
 
 	/* Shut down the LLDP sender */
 	COMMON_TRANSITION_DOWN_FROM(NI_FSM_STATE_LLDP_UP, "lldpDown", .call_overloading = TRUE, .may_fail = TRUE),
