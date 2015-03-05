@@ -3498,8 +3498,9 @@ __ni_netdev_update_routes(ni_netconfig_t *nc, ni_netdev_t *dev,
 	} else
 	if (old_lease) {
 		family = old_lease->family;
-		old_type = old_lease->type;
 	}
+	if (old_lease)
+		old_type = old_lease->type;
 
 	/* Loop over all tables and routes currently assigned to the interface.
 	 * If the configuration no longer specifies it, delete it.
