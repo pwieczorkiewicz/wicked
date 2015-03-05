@@ -122,7 +122,7 @@ static int	__ni_rtnl_link_add_slave_down(const ni_netdev_t *, const char *, unsi
 static int	__ni_rtnl_send_deladdr(ni_netdev_t *, const ni_address_t *);
 static int	__ni_rtnl_send_newaddr(ni_netdev_t *, const ni_address_t *, int);
 static int	__ni_rtnl_send_delroute(ni_netdev_t *, ni_route_t *);
-static int	__ni_rtnl_send_newroute(ni_netdev_t *, ni_route_t *, int);
+static int	__ni_rtnl_send_newroute(ni_netconfig_t *nc, ni_route_t *, int);
 
 static int	__ni_system_netdev_create(ni_netconfig_t *nc,
 					const char *ifname, unsigned int ifindex,
@@ -2809,12 +2809,16 @@ failed:
  * Add a static route
  */
 static int
-__ni_rtnl_send_newroute(ni_netdev_t *dev, ni_route_t *rp, int flags)
+__ni_rtnl_send_newroute(ni_netconfig_t *nc, ni_route_t *rp, int flags)
 {
 	ni_stringbuf_t buf = NI_STRINGBUF_INIT_DYNAMIC;
 	struct rtmsg rt;
-	struct nl_msg *msg;
+	struct nl_msg *msg = NULL;
+	ni_netdev_t *dev;
 	int err;
+
+	if (!nc)
+		goto failed;
 
 	ni_debug_ifconfig("%s(%s%s)", __FUNCTION__,
 			flags & NLM_F_REPLACE ? "replace " :
@@ -2877,7 +2881,7 @@ __ni_rtnl_send_newroute(ni_netdev_t *dev, ni_route_t *rp, int flags)
 			if (rp->nh.device.index)
 				NLA_PUT_U32(msg, RTA_OIF, rp->nh.device.index);
 			else
-			if (dev && ni_string_eq(rp->nh.device.name, dev->name))
+			if ((dev = ni_netdev_by_name(nc, rp->nh.device.name)))
 				NLA_PUT_U32(msg, RTA_OIF, dev->link.ifindex);
 			else
 				goto failed; /* apply to other device? */
@@ -2890,7 +2894,6 @@ __ni_rtnl_send_newroute(ni_netdev_t *dev, ni_route_t *rp, int flags)
 		struct nlattr *mp_head;
 		struct rtnexthop *rtnh;
 		ni_route_nexthop_t *nh;
-		ni_netconfig_t *nc = NULL;
 
 		mp_head = nla_nest_start(msg, RTA_MULTIPATH);
 		if (mp_head == NULL)
@@ -2908,19 +2911,12 @@ __ni_rtnl_send_newroute(ni_netdev_t *dev, ni_route_t *rp, int flags)
 			if (nh->device.index) {
 				rtnh->rtnh_ifindex = nh->device.index;
 			} else
-			if (dev && ni_string_eq(rp->nh.device.name, dev->name)) {
-				rtnh->rtnh_ifindex = dev->link.ifindex;
-			} else
-			if (rp->nh.device.name) {
+			if (!ni_string_empty(rp->nh.device.name)) {
 				/* TODO: multi-device hops not supported yet */
-				ni_netdev_t *other;
-
-				if (!nc || !(nc = ni_global_state_handle(0)))
-					goto failed;
-				if (!(other = ni_netdev_by_name(nc, rp->nh.device.name)))
+				if (!(dev = ni_netdev_by_name(nc, rp->nh.device.name)))
 					goto failed;
 
-				rtnh->rtnh_ifindex = other->link.ifindex;
+				rtnh->rtnh_ifindex = dev->link.ifindex;
 			} else
 			if (!ni_sockaddr_is_specified(&nh->gateway)) {
 				/* hop without gw and device? */
@@ -3561,7 +3557,7 @@ __ni_netdev_update_routes(ni_netconfig_t *nc, ni_netdev_t *dev,
 			}
 
 			if (new_route != NULL) {
-				if (__ni_rtnl_send_newroute(dev, new_route, NLM_F_REPLACE) >= 0) {
+				if (__ni_rtnl_send_newroute(nc, new_route, NLM_F_REPLACE) >= 0) {
 					ni_debug_ifconfig("%s: successfully updated existing route %s",
 							dev->name, ni_route_print(&buf, rp));
 					ni_stringbuf_destroy(&buf);
@@ -3606,7 +3602,7 @@ __ni_netdev_update_routes(ni_netconfig_t *nc, ni_netdev_t *dev,
 					dev->name, ni_route_print(&buf, rp));
 			ni_stringbuf_destroy(&buf);
 
-			if ((rv = __ni_rtnl_send_newroute(dev, rp, NLM_F_CREATE)) < 0)
+			if ((rv = __ni_rtnl_send_newroute(nc, rp, NLM_F_CREATE)) < 0)
 				return rv;
 
 			rp->owner = new_lease->type;
