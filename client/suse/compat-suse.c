@@ -3083,6 +3083,8 @@ __ni_suse_addrconf_static(const ni_sysconfig_t *sc, ni_compat_netdev_t *compat)
 		}
 	}
 
+/* We can rely on the kernel to set 127.0.0.1/8 and ::1/128 addrs */
+#if 0
 	/* Hack up the loopback interface */
 	if (dev->link.type == NI_IFTYPE_LOOPBACK) {
 		ni_sockaddr_t local_addr;
@@ -3098,6 +3100,7 @@ __ni_suse_addrconf_static(const ni_sysconfig_t *sc, ni_compat_netdev_t *compat)
 				ni_address_new(AF_INET6, 128, &local_addr, &dev->addrs);
 		}
 	}
+#endif
 
 	ni_address_list_dedup(&dev->addrs);
 
