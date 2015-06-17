@@ -3171,7 +3171,7 @@ ni_ifworker_netif_resolve_cb(xml_node_t *node, const ni_xs_type_t *type, const x
 			const char *method;
 
 			if ((attr = xml_node_get_attr(mchild, "check")) == NULL
-			 || !ni_string_eq(attr, "netif-child-state"))
+			 || !ni_string_eq(attr, "netif-check-state"))
 				continue;
 
 			if ((attr = xml_node_get_attr(mchild, "min-state")) != NULL) {
@@ -3196,7 +3196,7 @@ ni_ifworker_netif_resolve_cb(xml_node_t *node, const ni_xs_type_t *type, const x
 			}
 
 			if (child_worker == NULL) {
-				ni_debug_application("%s: <meta:require check=netif-child-state> without netif-reference",
+				ni_debug_application("%s: <meta:require check=netif-check-state> without netif-reference",
 						xml_node_location(mchild));
 				return FALSE;
 			}

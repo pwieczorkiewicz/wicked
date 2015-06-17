@@ -199,6 +199,7 @@
    <alias type="string"/>
    <master type="string">
      <meta:netif-reference shared="false"/>
+     <meta:require check="netif-check-state" op="linkUp" min-state="device-up" />
    </master>
 
    <ipv4 type="network-interface:af-info"/>
