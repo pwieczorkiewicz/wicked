@@ -85,15 +85,27 @@ __ni_ifup_generate_match(const char *name, ni_ifworker_t *w)
 		goto error;
 
 	if (w->children.count) {
-		xml_node_t *or;
+		xml_node_t *or = NULL;
 		unsigned int i;
-
-		if (!(or = xml_node_new(NI_NANNY_IFPOLICY_MATCH_COND_OR, match)))
-			goto error;
 
 		for (i = 0; i < w->children.count; i++) {
 			ni_ifworker_t *child = w->children.data[i];
 			xml_node_t *cnode;
+
+			/* Do not add <child> dependency for devices being
+			 * port/slave of some device and which have lowerdev
+			 * dependency to another device.
+			 * Either masterdev is the current worker or lowerdev
+			 * is current worker's child.
+			 */
+			if (child->masterdev && child->lowerdev)
+			    continue;
+
+			/* Create <or> only once when there is a valid child */
+			if (or == NULL) {
+				if (!(or = xml_node_new(NI_NANNY_IFPOLICY_MATCH_COND_OR, match)))
+					goto error;
+			}
 
 			cnode = __ni_ifup_generate_match(NI_NANNY_IFPOLICY_MATCH_COND_CHILD, child);
 			xml_node_add_child(or ,cnode);
