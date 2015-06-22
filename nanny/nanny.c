@@ -177,7 +177,7 @@ ni_nanny_recheck(ni_nanny_t *mgr, ni_ifworker_t *w)
 			/* We have an ifworker for factory device - follow factory device path */
 			if (ni_ifworker_is_factory_device(w))
 				factory_device = TRUE;
-			else if (w->pending) {
+			else {
 				ni_error("%s: Unable to recheck non-factory worker - "
 					"device is not present (pending=%s, device=%s)",
 					w->name, ni_format_boolean(w->pending),
@@ -387,7 +387,7 @@ ni_nanny_create_policy(ni_dbus_object_t **policy_object, ni_nanny_t *mgr, const 
 
 	/* Trigger recheck on factory devices or existing devices if schedule is set */
 	if (!w->kickstarted) {
-		if (ni_ifworker_is_factory_device(w))
+		if (!ni_ifworker_is_device_created(w) && ni_ifworker_is_factory_device(w))
 			ni_nanny_schedule_recheck(&mgr->recheck, w);
 		else if (schedule && ni_netdev_device_is_ready(w->device))
 			ni_nanny_schedule_recheck(&mgr->recheck, w);
@@ -544,7 +544,7 @@ ni_nanny_unregister_device(ni_nanny_t *mgr, ni_ifworker_t *w)
 {
 	ni_managed_device_t *mdev = NULL;
 
-	if ((mdev = ni_nanny_get_device(mgr, w)) == NULL) {
+	if (!ni_ifworker_is_device_created(w) || !(mdev = ni_nanny_get_device(mgr, w))) {
 		ni_error("%s: cannot unregister; device not known", w->name);
 		return;
 	}
