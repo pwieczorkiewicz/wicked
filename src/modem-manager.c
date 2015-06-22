@@ -533,7 +533,7 @@ ni_modem_get_client_state(ni_modem_t *dev)
 		return NULL;
 
 	if (!dev->client_state)
-		dev->client_state = ni_client_state_new(0);
+		dev->client_state = ni_client_state_new();
 
 	return dev->client_state;
 }
