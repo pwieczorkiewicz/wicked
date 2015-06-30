@@ -3171,6 +3171,10 @@ ni_ifworker_netif_resolve_cb(xml_node_t *node, const ni_xs_type_t *type, const x
 			if (!(attr = xml_node_get_attr(mchild, "check")))
 				continue;
 
+			/* Compatibility name "netif-child-state" */
+			if (ni_string_eq(attr, "netif-child-state"))
+				attr = "netif-check-state";
+
 			/* Ignore if check attribute value is wrong */
 			 if (!ni_string_eq(attr, "netif-check-state"))
 				continue;
