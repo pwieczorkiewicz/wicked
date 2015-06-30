@@ -3128,13 +3128,12 @@ ni_ifworker_netif_resolve_cb(xml_node_t *node, const ni_xs_type_t *type, const x
 	ni_ifworker_t *w = closure->worker;
 	ni_ifworker_t *child_worker = NULL;
 	xml_node_t *mchild;
+	ni_bool_t shared = FALSE;
 
 	for (mchild = metadata->children; mchild; mchild = mchild->next) {
 		const char *attr;
 
 		if (ni_string_eq(mchild->name, "netif-reference")) {
-			ni_bool_t shared = FALSE;
-
 			if (child_worker) {
 				ni_error("%s: duplicate/conflicting references", xml_node_location(node));
 				return FALSE;
@@ -3150,8 +3149,6 @@ ni_ifworker_netif_resolve_cb(xml_node_t *node, const ni_xs_type_t *type, const x
 				return FALSE;
 		} else
 		if (ni_string_eq(mchild->name, "modem-reference")) {
-			ni_bool_t shared = FALSE;
-
 			if (child_worker) {
 				ni_error("%s: duplicate/conflicting references", xml_node_location(node));
 				return FALSE;
@@ -3170,8 +3167,12 @@ ni_ifworker_netif_resolve_cb(xml_node_t *node, const ni_xs_type_t *type, const x
 			unsigned int min_state = NI_FSM_STATE_NONE, max_state = __NI_FSM_STATE_MAX;
 			const char *method;
 
-			if ((attr = xml_node_get_attr(mchild, "check")) == NULL
-			 || !ni_string_eq(attr, "netif-check-state"))
+			/* Ignore if there is no check attribute */
+			if (!(attr = xml_node_get_attr(mchild, "check")))
+				continue;
+
+			/* Ignore if check attribute value is wrong */
+			 if (!ni_string_eq(attr, "netif-check-state"))
 				continue;
 
 			if ((attr = xml_node_get_attr(mchild, "min-state")) != NULL) {
