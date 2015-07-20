@@ -3176,6 +3176,12 @@ ni_ifworker_netif_resolve_cb(xml_node_t *node, const ni_xs_type_t *type, const x
 			if (!(cw = ni_ifworker_resolve_reference(closure->fsm, node, NI_IFWORKER_TYPE_NETDEV, w->name)))
 				continue;
 
+			if (cw == w->masterdev || cw->lowerdev == w) {
+				ni_ifworker_t *tmp = cw;
+				cw = w;
+				w = tmp;
+			}
+
 			if ((attr = xml_node_get_attr(mchild, "shared")) != NULL)
 				shared = ni_string_eq(attr, "true");
 
