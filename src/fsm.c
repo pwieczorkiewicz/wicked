@@ -418,6 +418,12 @@ ni_ifworker_requirement_build(const char *check_name, xml_node_t *node, ni_fsm_r
 		req = ctor(node);
 	} else
 	if (ni_string_eq(check_name, "netif-resolve")) {
+		ni_stringbuf_t npath = NI_STRINGBUF_INIT_DYNAMIC;
+
+		ni_trace("%s: allocating netif-resolve requirement for %s",
+				__func__, xml_node_get_path(&npath, node, NULL));
+		ni_stringbuf_destroy(&npath);
+
 		req = ni_ifworker_netif_resolver_new(node);
 	} else
 	if (ni_string_eq(check_name, "modem-resolve")) {
@@ -1102,6 +1108,11 @@ static ni_ifworker_t *
 ni_ifworker_resolve_reference(ni_fsm_t *fsm, xml_node_t *devnode, ni_ifworker_type_t type, const char *origin)
 {
 	ni_ifworker_t *child;
+	ni_stringbuf_t npath = NI_STRINGBUF_INIT_DYNAMIC;
+
+	ni_trace("%s: resolving %s device reference, origin %s",
+			__func__, xml_node_get_path(&npath, devnode, NULL), origin);
+	ni_stringbuf_destroy(&npath);
 
 	if (devnode->children || devnode->cdata) {
 		/* Try to identify device based on attributes given in the
@@ -1301,19 +1312,40 @@ ni_ifworker_del_child_master(xml_node_t *config)
 static ni_bool_t
 ni_ifworker_add_child(ni_ifworker_t *parent, ni_ifworker_t *child, xml_node_t *devnode, ni_bool_t shared)
 {
+	ni_stringbuf_t npath = NI_STRINGBUF_INIT_DYNAMIC;
 	unsigned int i;
 	char *other_owner;
 
 	/* Check if this child is already owned by the given parent. */
 	for (i = 0; i < parent->children.count; ++i) {
 		if (parent->children.data[i] == child) {
-			if (xml_node_is_empty(child->config.node))
+
+			if (xml_node_is_empty(child->config.node)) {
+				ni_trace("%s(%s): already have child %s (devnode %s): config: %s",
+					__func__, parent->name, child->name,
+					xml_node_get_path(&npath, devnode, NULL),
+					"missed -> generate");
+				ni_stringbuf_destroy(&npath);
+
 				ni_ifworker_generate_default_config(parent, child);
+			} else {
+				ni_trace("%s(%s): already have child %s (devnode %s): config: %s",
+					__func__, parent->name, child->name,
+					xml_node_get_path(&npath, devnode, NULL),
+					"available");
+				ni_stringbuf_destroy(&npath);
+			}
 			return TRUE;
 		}
 	}
 
 	if (shared) {
+		ni_trace("%s(%s): adjusting loverdev for child %s (devnode %s): config: %s",
+				__func__, parent->name, child->name,
+				xml_node_get_path(&npath, devnode, NULL),
+				xml_node_is_empty(child->config.node) ? "missed -> generate" : "available");
+		ni_stringbuf_destroy(&npath);
+
 		/* The reference allows sharing with other uses, e.g. VLANs. */
 		if (parent->lowerdev && !ni_string_eq(parent->lowerdev->name, child->name)) {
 			if (xml_node_is_empty(parent->lowerdev->config.node)) {
@@ -1336,6 +1368,12 @@ ni_ifworker_add_child(ni_ifworker_t *parent, ni_ifworker_t *child, xml_node_t *d
 		}
 	}
 	else {
+		ni_trace("%s(%s): adjusting masterdev for child %s (devnode %s): config: %s",
+				__func__, parent->name, child->name,
+				xml_node_get_path(&npath, devnode, NULL),
+				xml_node_is_empty(child->config.node) ? "missed -> generate" : "available");
+		ni_stringbuf_destroy(&npath);
+
 		if (child->masterdev && !ni_string_eq(child->masterdev->name, parent->name)) {
 			if (xml_node_is_empty(child->masterdev->config.node)) {
 				ni_debug_application("%s (%s): subordinate interface's master device %s has no config node, cannot set to %s",
@@ -1357,6 +1395,11 @@ ni_ifworker_add_child(ni_ifworker_t *parent, ni_ifworker_t *child, xml_node_t *d
 
 	if (xml_node_is_empty(child->config.node))
 		ni_ifworker_generate_default_config(parent, child);
+
+	ni_trace("%s(%s): adding child %s (devnode %s)",
+			__func__, parent->name, child->name,
+			xml_node_get_path(&npath, devnode, NULL));
+	ni_stringbuf_destroy(&npath);
 
 	ni_ifworker_array_append(&parent->children, child);
 	return TRUE;
@@ -2956,6 +2999,7 @@ ni_ifworker_bind_device_factory_api(ni_ifworker_t *w)
 			return -NI_ERROR_DEVICE_NOT_COMPATIBLE;
 		}
 
+		ni_trace("%s(%s) binding service factory %s apis", __func__, w->name, service ? service->name : NULL);
 		if ((rv = ni_ifworker_bind_device_apis(w, service)) < 0)
 			return rv;
 
@@ -2978,6 +3022,7 @@ ni_ifworker_bind_device_factory_api(ni_ifworker_t *w)
 		if (method == NULL)
 			continue;
 
+		ni_trace("%s(%s) mapping config to %s:%s arguments", __func__, w->name, service->name, method->name);
 		if ((rv = ni_dbus_xml_map_method_argument(method, 1, w->config.node, &config, NULL)) < 0) {
 			ni_ifworker_fail(w, "cannot create interface: xml document error");
 			return -NI_ERROR_DOCUMENT_ERROR;
@@ -2994,6 +3039,12 @@ ni_ifworker_bind_device_factory_api(ni_ifworker_t *w)
 			w->device_api.factory_method = method;
 			xml_node_free(w->device_api.config);
 			w->device_api.config = xml_node_clone_ref(config);
+
+			ni_debug_wicked_xml(w->device_api.config, NI_LOG_DEBUG,
+				"%s(%s) bound device api method %s::%s config:",
+				__func__, w->name,
+				w->device_api.factory_service->name,
+				w->device_api.factory_method->name);
 		}
 	}
 
@@ -3029,13 +3080,30 @@ ni_ifworker_bind_device_apis(ni_ifworker_t *w, const ni_dbus_service_t *service)
 		return 0;
 
 	method = ni_dbus_service_get_method(service, "changeDevice");
+	ni_trace("%s(%s) mapping config to %s:%s (changeDevice) arguments",
+			__func__, w->name, service->name, method ? method->name : NULL);
 	if (method && ni_dbus_xml_map_method_argument(method, 0, w->config.node, &config, NULL) < 0)
 		return -NI_ERROR_DOCUMENT_ERROR;
 
 	w->device_api.service = service;
 	w->device_api.method = method;
+	if (config) {
+		ni_debug_wicked_xml(config, NI_LOG_DEBUG,
+			"%s(%s) bound device api method %s::%s config (%s):",
+			__func__, w->name,
+			w->device_api.service->name,
+			w->device_api.method->name,
+			w->device_api.config ? "replaced" : "assigned");
+	} else {
+		ni_trace("%s(%s) bound device api method %s::%s config (%s): NULL",
+			__func__, w->name,
+			w->device_api.service->name,
+			w->device_api.method->name,
+			w->device_api.config ? "replaced" : "assigned");
+	}
 	xml_node_free(w->device_api.config);
 	w->device_api.config = xml_node_clone_ref(config);
+
 	return 1;
 }
 
@@ -3066,11 +3134,17 @@ ni_ifworker_bind_early(ni_ifworker_t *w, ni_fsm_t *fsm, ni_bool_t prompt_now)
 	if (prompt_now)
 		context.prompt_callback = ni_ifworker_prompt_cb;
 
+	ni_trace("%s(%s) check if we need to bind a device factory", __func__, w->name);
 	/* First, check for factory interface */
 	if ((rv = ni_ifworker_bind_device_factory_api(w)) < 0)
 		return rv;
 
 	if (w->device_api.factory_method && w->device_api.config) {
+		ni_debug_wicked_xml(w->device_api.config, NI_LOG_DEBUG,
+			"%s(%s) validate factory %s::%s() config:",
+			__func__, w->name,
+			w->device_api.factory_service->name,
+			w->device_api.factory_method->name);
 		/* The XML validation code will do a pass over the part of our XML
 		 * document that's used for the deviceNew() call, and call us for
 		 * every bit of metadata it finds.
@@ -3165,6 +3239,9 @@ ni_ifworker_netif_resolve_cb(xml_node_t *node, const ni_xs_type_t *type, const x
 	for (mchild = metadata->children; mchild; mchild = mchild->next) {
 		ni_stringbuf_t path = NI_STRINGBUF_INIT_DYNAMIC;
 		const char *attr;
+
+		ni_trace("%s: %s meta %s", __func__, xml_node_get_path(&path, node, NULL), mchild->name);
+		ni_stringbuf_destroy(&path);
 
 		if (ni_string_eq(mchild->name, "netif-reference")) {
 			ni_bool_t shared = FALSE;
@@ -3706,6 +3783,14 @@ dbus_bool_t
 ni_ifworker_xml_metadata_callback(xml_node_t *node, const ni_xs_type_t *type, const xml_node_t *metadata, void *user_data)
 {
 	ni_fsm_transition_t *action = user_data;
+	ni_stringbuf_t npath = NI_STRINGBUF_INIT_DYNAMIC;
+	ni_stringbuf_t mpath = NI_STRINGBUF_INIT_DYNAMIC;
+
+	ni_trace("%s: validating %s metadata %s", __func__,
+			xml_node_get_path(&npath, node, NULL),
+			xml_node_get_path(&mpath, metadata, NULL));
+	ni_stringbuf_destroy(&npath);
+	ni_stringbuf_destroy(&mpath);
 
 	if (ni_string_eq(metadata->name, "require")) {
 		if (ni_ifworker_require_xml(action, metadata, node, NULL) < 0)
@@ -3780,8 +3865,18 @@ ni_ifworker_map_method_requires(ni_ifworker_t *w, ni_fsm_transition_t *action,
 	if (count == 0)
 		return 0;
 
+	ni_trace("%s(%s) action %s has %u requires", __func__, w->name,
+			action->common.method_name, count);
+
 	for (i = 0; i < count; ++i) {
 		int rv;
+		ni_stringbuf_t rpath = NI_STRINGBUF_INIT_DYNAMIC;
+
+		ni_trace("%s(%s) checking require %s for %s:%s (%s)",
+				__func__, w->name,
+				xml_node_get_path(&rpath, req_nodes[i], NULL),
+				service->name, method->name, action->common.method_name);
+		ni_stringbuf_destroy(&rpath);
 
 		if ((rv = ni_ifworker_require_xml(action, req_nodes[i], NULL, w->config.node)) < 0)
 			return rv;
@@ -3969,6 +4064,8 @@ ni_ifworker_do_common_bind(ni_fsm_t *fsm, ni_ifworker_t *w, ni_fsm_transition_t 
 		else
 			config = w->config.node;	/* up transition */
 
+		ni_trace("%s(%s) mapping config to %s:%s arguments", __func__, w->name, bind->service->name, bind->method->name);
+
 		if (ni_dbus_xml_map_method_argument(bind->method, 0, config, &bind->config, &bind->skip_call) < 0)
 			goto document_error;
 
@@ -3976,12 +4073,17 @@ ni_ifworker_do_common_bind(ni_fsm_t *fsm, ni_ifworker_t *w, ni_fsm_transition_t 
 		 * try to prompt for missing information.
 		 */
 		if (bind->config != NULL) {
-			bind->config = xml_node_clone_ref(bind->config);
 			struct ni_ifworker_xml_validation_user_data user_data = {
 				.fsm = fsm,
 				.worker = w,
 			};
 			ni_dbus_xml_validate_context_t context;
+
+			bind->config = xml_node_clone_ref(bind->config);
+			ni_debug_wicked_xml(bind->config, NI_LOG_DEBUG,
+					"%s(%s) validating bound action method %s::%s config:",
+					__func__, w->name,
+					bind->service->name, bind->method->name);
 
 			context.metadata_callback = ni_ifworker_xml_metadata_callback;
 			context.prompt_callback = ni_ifworker_prompt_cb;
