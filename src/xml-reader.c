@@ -698,12 +698,13 @@ xml_skip_comment(xml_reader_t *xr)
  * For now, we support &<number>; as well as symbolic entities
  *   lt gt amp
  */
-ni_bool_t
-xml_expand_entity(xml_reader_t *xr, ni_stringbuf_t *res)
+static inline ni_bool_t
+do_xml_expand_entity(xml_reader_t *xr, ni_stringbuf_t *entity, unsigned int *expanded)
 {
-	char temp[128];
-	ni_stringbuf_t entity = NI_STRINGBUF_INIT_BUFFER(temp);
-	int cc, expanded;
+	int cc;
+
+	if (!xr || !entity || !expanded)
+		return FALSE;
 
 	while ((cc = xml_getc(xr)) != ';') {
 		if (cc == EOF) {
@@ -712,36 +713,48 @@ xml_expand_entity(xml_reader_t *xr, ni_stringbuf_t *res)
 		}
 		if (isspace(cc))
 			continue;
-		ni_stringbuf_putc(&entity, cc);
+		ni_stringbuf_putc(entity, cc);
 	}
 
-	if (!entity.string) {
+	if (ni_string_empty(entity->string)) {
 		xml_parse_error(xr, "Empty entity &;");
 		return FALSE;
 	}
 
-	if (!strcasecmp(entity.string, "lt"))
-		expanded = '<';
-	else if (!strcasecmp(entity.string, "gt"))
-		expanded = '>';
-	else if (!strcasecmp(entity.string, "amp"))
-		expanded = '&';
+	if (!strcasecmp(entity->string, "lt"))
+		*expanded = '<';
+	else if (!strcasecmp(entity->string, "gt"))
+		*expanded = '>';
+	else if (!strcasecmp(entity->string, "amp"))
+		*expanded = '&';
 	else {
-		const char *es = entity.string;
+		const char *es = entity->string;
 
 		if (*es == '#') {
-			expanded = strtoul(es + 1, (char **) &es, 0);
+			*expanded = strtoul(es + 1, (char **) &es, 0);
 			if (*es == '\0')
-				goto good;
+				return TRUE;
 		}
 
-		xml_parse_error(xr, "Cannot expand unknown entity &%s;", entity.string);
+		xml_parse_error(xr, "Cannot expand unknown entity &%s;", entity->string);
 		return FALSE;
 	}
 
-good:
-	ni_stringbuf_putc(res, expanded);
 	return TRUE;
+}
+
+ni_bool_t
+xml_expand_entity(xml_reader_t *xr, ni_stringbuf_t *res)
+{
+	ni_stringbuf_t entity = NI_STRINGBUF_INIT_DYNAMIC;
+	unsigned int expanded = 0;
+	ni_bool_t ret = do_xml_expand_entity(xr, &entity, &expanded);
+
+	if (ret)
+		ni_stringbuf_putc(res, expanded);
+
+	ni_stringbuf_destroy(&entity);
+	return ret;
 }
 
 /*
