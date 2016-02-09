@@ -1352,74 +1352,73 @@ ni_teamd_config_file_write(const char *instance, const ni_team_t *config, const 
 	uid_t owner = 0;
 	gid_t group = 0;
 	FILE *fp = NULL;
-	int fd;
+	int fd, ret = -1;
 
 	if (ni_string_empty(instance) || !config)
-		return -1;
+		goto done;
 
 	if (ni_mkdir_maybe(NI_TEAMD_CONFIG_DIR, NI_TEAMD_CONFIG_DIR_MODE) < 0) {
 		ni_error("Cannot create teamd run directory \"%s\": %m", NI_TEAMD_CONFIG_DIR);
-		return -1;
+		goto done;
 	}
 
 	ni_teamd_config_file_owner(&owner, &group);
 	if (chown(NI_TEAMD_CONFIG_DIR, owner, group) < 0) {
 		ni_error("Unable to change ownership of %s to UID: %u, GID: %u (%m)\n",
 			NI_TEAMD_CONFIG_DIR, owner, group);
-		return -1;
+		goto done;
 	}
 
 	if (!ni_teamd_config_file_name(&filename, instance)) {
 		ni_error("%s: cannot create teamd config file name", instance);
-		return -1;
+		goto done;
 	}
 
 	snprintf(tempname, sizeof(tempname), "%s.XXXXXX", filename);
 	if ((fd = mkstemp(tempname)) < 0) {
 		ni_error("%s: cannot create temporary teamd config '%s': %m", instance, tempname);
-		free(filename);
-		return -1;
+		goto done;
 	}
 
 	if ((fp = fdopen(fd, "we")) == NULL) {
 		ni_error("%s: cannot reopen temporary teamd config '%s': %m", instance, tempname);
 		close(fd);
 		unlink(tempname);
-		free(filename);
-		return -1;
+		goto done;
 	}
 
 	if (ni_teamd_config_file_dump(fp, instance, config, hwaddr) < 0) {
 		ni_error("%s: unable to generate teamd config file for '%s'", instance, filename);
 		fclose(fp);
 		unlink(tempname);
-		free(filename);
-		return -1;
+		goto done;
 	}
 	fflush(fp);
 
 	if (fchown(fd, owner, group) < 0) {
 		ni_error("Unable to change ownership of %s to UID: %u, GID: %u (%m)\n",
 			filename, owner, group);
-		return -1;
+		goto done;
 	}
 
 	if (fchmod(fd, NI_TEAMD_CONFIG_FILE_MODE) < 0) {
 		ni_error("Unable to change permissions of %s (%m)\n", filename);
-		return -1;
+		goto done;
 	}
 	fclose(fp);
 
 	if ((fd = rename(tempname, filename)) != 0) {
 		ni_error("%s: unable to commit teamd config file to '%s'", instance, filename);
 		unlink(tempname);
-		free(filename);
-		return -1;
+		goto done;
 	}
 
 	ni_debug_ifconfig("%s: teamd config file written to '%s'", instance, filename);
-        free(filename);
-	return 0;
+	ret = 0;
+
+done:
+	ni_string_free(&filename);
+	return ret;
 }
 
 int
