@@ -557,8 +557,10 @@ ni_ifworker_fail(ni_ifworker_t *w, const char *fmt, ...)
 	vsnprintf(errmsg, sizeof(errmsg), fmt, ap);
 	va_end(ap);
 
+	__ni_ifworker_reset_fsm(w);
+	__ni_ifworker_reset_device_api(w);
+
 	ni_error("device %s: %s", w->name, ni_string_empty(errmsg) ? "failed" : errmsg);
-	w->fsm.state = NI_FSM_STATE_NONE;
 	w->failed = TRUE;
 	w->pending = FALSE;
 
