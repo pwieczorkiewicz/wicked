@@ -349,6 +349,12 @@ ni_nanny_fsm_monitor_handler(ni_dbus_connection_t *conn, ni_dbus_message_t *msg,
 	for (i = 0; i < monitor->marked->count; ++i) {
 		ni_ifworker_t *w = monitor->marked->data[i];
 
+		if (ni_ifworker_is_hotplug_device(w) && !ni_ifworker_is_factory_device(w) && !ni_ifworker_is_device_created(w)) {
+			ni_debug_application("%s: hotplug device not present - skipping", w->name);
+			ni_ifworker_array_remove(monitor->marked, w);
+			continue;
+		}
+
 		if (cur_state != NI_FSM_STATE_NONE && cur_state != target_state)
 			continue;
 
@@ -416,10 +422,21 @@ ni_nanny_fsm_monitor_arm(ni_nanny_fsm_monitor_t *monitor, unsigned long timeout)
 void
 ni_nanny_fsm_monitor_run(ni_nanny_fsm_monitor_t *monitor, ni_ifworker_array_t *marked, int status)
 {
+	unsigned int i;
+
 	if (!monitor || monitor->marked || !marked)
 		return;
 
 	monitor->marked = ni_ifworker_array_clone(marked);
+	for (i = 0; i < marked->count; i++) {
+		ni_ifworker_t *w = marked->data[i];
+
+		if (ni_ifworker_is_hotplug_device(w) && !ni_ifworker_is_factory_device(w) && !ni_ifworker_is_device_created(w)) {
+			ni_debug_application("%s: hotplug device not present - skipping", w->name);
+			ni_ifworker_array_remove(monitor->marked, w);
+		}
+	}
+
 	while (!ni_caught_terminal_signal()) {
 		long timeout;
 
