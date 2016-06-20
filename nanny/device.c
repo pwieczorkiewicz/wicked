@@ -171,6 +171,10 @@ ni_factory_device_up(ni_fsm_t *fsm, ni_ifworker_t *w)
 	ifmarker.persistent = w->control.persistent;
 
 	ni_ifworker_array_append(&ifmarked, w);
+	if (ni_ifworker_bind_early(w, fsm, TRUE) < 0) {
+		ni_ifworker_array_destroy(&ifmarked);
+		return -1;
+	}
 	ni_fsm_mark_matching_workers(fsm, &ifmarked, &ifmarker);
 	ni_ifworker_array_destroy(&ifmarked);
 
